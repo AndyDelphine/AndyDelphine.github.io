@@ -349,6 +349,50 @@ main {
   padding: 1.2rem;
 }
 
+.ad-block {
+  margin-top: 1.35rem;
+  padding: 1rem;
+  border-radius: 1.5rem;
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(14px);
+}
+
+.ad-label {
+  margin-bottom: 0.75rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--muted);
+}
+
+.ad-slot {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+
+.ad-slot-728x90,
+.ad-slot-300x250,
+.ad-slot-native {
+  min-height: 90px;
+}
+
+.ad-slot-300x250 {
+  min-height: 250px;
+}
+
+.ad-slot-native {
+  min-height: 180px;
+}
+
+.ad-leaderboard {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.85rem;
+}
+
 .platforms-panel {
   margin-top: 1.35rem;
   border-radius: 1.9rem;
@@ -825,5 +869,21 @@ main {
 
   .movie-grid {
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+
+  .ad-slot-728x90,
+  .ad-slot-300x250 {
+    display: none;
+  }
+
+  .ad-slot-320x50 {
+    display: flex;
+    min-height: 50px;
+  }
+}
+
+@media (min-width: 701px) {
+  .ad-slot-320x50 {
+    display: none;
   }
 }
