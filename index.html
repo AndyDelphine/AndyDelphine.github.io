@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0b1020" />
+  <title>MyCineverse | TMDB Movie & TV Explorer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="bg-orb bg-orb-one"></div>
+  <div class="bg-orb bg-orb-two"></div>
+
+  <header class="topbar">
+    <a class="brand" href="#">
+      <img class="brand-mark" src="assets/images/logo.svg" alt="" aria-hidden="true" />
+      <span class="brand-text">
+        <strong>My Cineverse</strong>
+        <small>Movie and TV discovery</small>
+      </span>
+    </a>
+
+    <nav class="topbar-links" aria-label="Primary">
+      <button class="nav-link active" data-media="movie">Movies</button>
+      <button class="nav-link" data-media="tv">TV Shows</button>
+      <button class="nav-link" data-section="popular">Popular</button>
+      <button class="nav-link" data-section="top_rated">Top Rated</button>
+      <button class="nav-link" data-section="now_playing">Now Playing</button>
+      <button class="nav-link" data-section="upcoming">Upcoming</button>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero" id="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">TMDB powered cinema browser</p>
+        <h1>Find your next watch across movies and TV.</h1>
+        <p class="hero-text">
+          Explore trending titles, search for anything on TMDB, and open rich movie or TV details without leaving the page.
+        </p>
+
+        <form class="search-bar" id="search-form" autocomplete="off">
+          <input
+            id="search-input"
+            type="search"
+            placeholder="Search movies, TV shows, and franchises"
+            aria-label="Search movies and TV"
+          />
+          <button type="submit">Search</button>
+        </form>
+
+        <div class="hero-stats">
+          <div>
+            <strong id="stat-count">0</strong>
+            <span>Titles Loaded</span>
+          </div>
+          <div>
+            <strong id="stat-section">Popular</strong>
+            <span>Active Feed</span>
+          </div>
+          <div>
+            <strong id="stat-rating">TMDB</strong>
+            <span>Data Source</span>
+          </div>
+        </div>
+      </div>
+
+      <aside class="feature-panel" aria-live="polite">
+        <div class="feature-media" id="feature-media">
+          <div class="feature-placeholder">Loading featured movie...</div>
+        </div>
+        <div class="feature-copy">
+          <p class="feature-label" id="feature-label">Recent movie spotlight</p>
+          <h2 id="feature-title">Loading...</h2>
+          <p id="feature-overview">We are picking a standout title to highlight.</p>
+          <div class="feature-meta">
+            <span id="feature-year">--</span>
+            <span id="feature-runtime">-- min</span>
+            <span id="feature-score">-- / 10</span>
+          </div>
+          <button class="ghost-button" id="feature-open">Open details</button>
+        </div>
+      </aside>
+    </section>
+
+    <section class="platforms-panel" aria-labelledby="platforms-title">
+      <div class="section-title">
+        <p>Watch elsewhere</p>
+        <h2 id="platforms-title">Other Streaming Platforms</h2>
+      </div>
+      <p class="platforms-note">
+        Licensed services and official platform homepages for quick access.
+      </p>
+      <div class="platform-groups">
+        <div class="platform-group">
+          <h3>Movies</h3>
+          <div class="platform-grid">
+            <a class="platform-card" href="https://www.netflix.com" target="_blank" rel="noreferrer">Netflix</a>
+            <a class="platform-card" href="https://www.primevideo.com" target="_blank" rel="noreferrer">Prime Video</a>
+            <a class="platform-card" href="https://nkiri.ink" target="_blank" rel="noreferrer">Nkiri</a>
+            <a class="platform-card" href="https://o2tvseries.com" target="_blank" rel="noreferrer">O2TVSeries</a>
+            <a class="platform-card" href="https://moviebox.ph" target="_blank" rel="noreferrer">MovieBox</a>
+          </div>
+        </div>
+        <div class="platform-group">
+          <h3>Anime</h3>
+          <div class="platform-grid">
+            <a class="platform-card" href="https://www.crunchyroll.com" target="_blank" rel="noreferrer">Crunchyroll</a>
+            <a class="platform-card" href="https://www.hidive.com" target="_blank" rel="noreferrer">HIDIVE</a>
+            <a class="platform-card" href="https://animepahe.pw" target="_blank" rel="noreferrer">AnimePahe</a>
+            <a class="platform-card" href="https://kisskh.do" target="_blank" rel="noreferrer">KissKH</a>
+            <a class="platform-card" href="https://9animetv.do" target="_blank" rel="noreferrer">9AnimeTV</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="toolbar">
+      <div class="section-title">
+        <p>Browse</p>
+        <h2>Genres and collections</h2>
+      </div>
+      <div class="pill-row" id="genre-row">
+        <button class="pill active" data-genre="all">All</button>
+        <span class="pill pill-muted">Loading genres...</span>
+      </div>
+    </section>
+
+    <section class="results">
+      <div class="results-head">
+        <div>
+          <p class="eyebrow" id="results-label">Popular titles</p>
+          <h2 id="results-title">Movies to explore</h2>
+        </div>
+        <button class="text-button" id="clear-search" hidden>Clear search</button>
+      </div>
+
+      <div class="status" id="status" role="status" aria-live="polite"></div>
+      <div class="movie-grid" id="movie-grid"></div>
+      <div class="pagination" id="pagination" aria-label="Pagination">
+        <button class="page-button" id="prev-page" disabled>Previous</button>
+        <span class="page-indicator" id="page-indicator">Page 1 of 1</span>
+        <button class="page-button" id="next-page" disabled>Next</button>
+      </div>
+    </section>
+  </main>
+
+  <dialog class="movie-modal" id="movie-modal">
+    <button class="modal-close" id="close-modal" aria-label="Close details">×</button>
+    <div class="modal-body" id="modal-body"></div>
+  </dialog>
+
+  <script src="assets/js/tmdb-config.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
