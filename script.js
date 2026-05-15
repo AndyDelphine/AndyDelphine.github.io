@@ -152,44 +152,6 @@ function posterTypeLabel(mediaType) {
   return mediaType === "tv" ? "show" : "movie";
 }
 
-const adInterstitialPages = ["ad.html"];
-
-function getAdStorageKey(route) {
-  return `mcv-ad:${encodeURIComponent(route)}`;
-}
-
-function hasSeenAdForRoute(route) {
-  return Boolean(sessionStorage.getItem(getAdStorageKey(route)));
-}
-
-function markAdSeenForRoute(route) {
-  sessionStorage.setItem(getAdStorageKey(route), "1");
-}
-
-function getRandomAdPage() {
-  return adInterstitialPages[Math.floor(Math.random() * adInterstitialPages.length)];
-}
-
-function maybeRedirectThroughAd(route) {
-  if (!route) return false;
-  if (hasSeenAdForRoute(route)) return false;
-  markAdSeenForRoute(route);
-  window.location.href = getRandomAdPage();
-  return true;
-}
-
-function interceptExternalAnchor(event, anchor) {
-  if (!anchor || !anchor.href) return false;
-  const targetUrl = anchor.href;
-  if (!/^https?:\/\//i.test(targetUrl)) return false;
-  if (anchor.closest(".ad-block")) return false;
-  if (maybeRedirectThroughAd(targetUrl)) {
-    event.preventDefault();
-    return true;
-  }
-  return false;
-}
-
 function getActiveSection() {
   return sections[state.media][state.section];
 }
@@ -658,29 +620,13 @@ function wireEvents() {
 
   dom.featureOpen.addEventListener("click", () => {
     if (!state.featured?.id) return;
-    const route = `title:${state.media}:${state.featured.id}`;
-    if (maybeRedirectThroughAd(route)) return;
     openTitle(state.featured.id, state.media);
   });
 
   dom.movieGrid.addEventListener("click", (event) => {
     const button = event.target.closest("[data-open]");
     if (!button) return;
-    const route = `title:${button.dataset.mediaType || state.media}:${button.dataset.open}`;
-    if (maybeRedirectThroughAd(route)) return;
     openTitle(button.dataset.open, button.dataset.mediaType || state.media);
-  });
-
-  document.addEventListener("click", (event) => {
-    const anchor = event.target.closest("a");
-    if (!anchor) return;
-    if (
-      anchor.closest(".platform-grid") ||
-      anchor.closest(".provider-grid") ||
-      anchor.closest(".modal-actions")
-    ) {
-      interceptExternalAnchor(event, anchor);
-    }
   });
 
   dom.closeModal.addEventListener("click", () => dom.modal.close());
