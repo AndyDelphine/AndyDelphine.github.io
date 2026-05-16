@@ -493,17 +493,27 @@ function providerLinksFor(providerData) {
     .join("");
 }
 
-function getStreamingLinks(mediaType) {
-  if (mediaType === "tv") {
+function isAnimeTitle(data) {
+  const genres = (data.genres || []).map((g) => String(g.name).toLowerCase());
+  if (genres.includes("animation") || genres.includes("anime")) return true;
+  if (data.original_language === "ja") return true;
+  return false;
+}
+
+function getStreamingLinksFor(data, mediaType) {
+  // If the title appears to be anime show, return animepahe only.
+  if (isAnimeTitle(data)) {
     return `
-      <a class="provider-pill" href="https://animepahe.pw" target="_blank" rel="noreferrer">Watch on animepahe.pw</a>
-    `;
-  } else {
-    return `
-      <a class="provider-pill" href="https://nkiri.ink" target="_blank" rel="noreferrer">Watch on nkiri.ink</a>
-      <a class="provider-pill" href="https://moviebox.ph" target="_blank" rel="noreferrer">Watch on moviebox.ph</a>
+      <a class="provider-pill" href="https://animepahe.pw" target="_blank" rel="noreferrer">animepahe</a>
     `;
   }
+
+  // For movies and TV series, show the three download buttons with short labels.
+  return `
+    <a class="provider-pill" href="https://nkiri.ink" target="_blank" rel="noreferrer">Nkiri</a>
+    <a class="provider-pill" href="https://moviebox.ph" target="_blank" rel="noreferrer">Moviebox</a>
+    <a class="provider-pill" href="https://o2tvseries.com" target="_blank" rel="noreferrer">o2tvseries</a>
+  `;
 }
 
 async function openTitle(movieId, mediaType = state.media) {
@@ -542,9 +552,9 @@ async function openTitle(movieId, mediaType = state.media) {
         <div class="genre-list">${genres || `<span>${mediaTypeLabel(mediaType)}</span>`}</div>
         <div class="cast-list">${castHtml || "<span>Cast unavailable</span>"}</div>
         <div class="watch-section">
-          <h3>Stream now</h3>
+          <h3>Download movie</h3>
           <div class="provider-grid">
-            ${getStreamingLinks(mediaType)}
+            ${getStreamingLinksFor(data, mediaType)}
           </div>
         </div>
         <div class="watch-section">
