@@ -1,6 +1,7 @@
 const TMDB_API_KEY = window.TMDB_CONFIG?.apiKey || "PASTE_YOUR_TMDB_API_KEY_HERE";
 const TMDB_BASE = "https://api.themoviedb.org/3";
 const IMAGE_BASE = "https://image.tmdb.org/t/p/w780";
+const MONETAG_SMARTLINK = "https://omg10.com/4/11016678";
 const POSTER_PLACEHOLDER =
   'data:image/svg+xml;charset=UTF-8,' +
   encodeURIComponent(`
@@ -468,6 +469,7 @@ async function openMovie(movieId) {
               ? `<a class="primary" href="https://www.youtube.com/watch?v=${encodeURIComponent(trailer.key)}" target="_blank" rel="noreferrer">Watch trailer</a>`
               : ""
           }
+          ${getSponsoredLinkMarkup()}
           <a class="secondary" href="https://www.themoviedb.org/${state.media}/${data.id}" target="_blank" rel="noreferrer">Open on TMDB</a>
         </div>
       </div>
@@ -513,6 +515,14 @@ function getStreamingLinksFor(data, mediaType) {
     <a class="provider-pill" href="https://nkiri.ink" target="_blank" rel="noreferrer">Nkiri</a>
     <a class="provider-pill" href="https://moviebox.ph" target="_blank" rel="noreferrer">Moviebox</a>
     <a class="provider-pill" href="https://o2tvseries.com" target="_blank" rel="noreferrer">o2tvseries</a>
+  `;
+}
+
+function getSponsoredLinkMarkup() {
+  return `
+    <a class="secondary sponsored" href="${MONETAG_SMARTLINK}" target="_blank" rel="noreferrer sponsored">
+      Sponsored offer
+    </a>
   `;
 }
 
@@ -569,6 +579,7 @@ async function openTitle(movieId, mediaType = state.media) {
               ? `<a class="primary" href="https://www.youtube.com/watch?v=${encodeURIComponent(trailer.key)}" target="_blank" rel="noreferrer">Watch trailer</a>`
               : ""
           }
+          ${getSponsoredLinkMarkup()}
           <a class="secondary" href="https://www.themoviedb.org/${mediaType}/${data.id}" target="_blank" rel="noreferrer">Open on TMDB</a>
         </div>
       </div>
