@@ -64,6 +64,30 @@ const providerHomepages = {
   "Paramount Plus": "https://www.paramountplus.com",
 };
 
+// Affiliate / sponsored smartlink configuration
+const SMARTLINK_URL = "https://omg10.com/4/11016678";
+const AFFILIATE_TRACKING_URL = window.AFFILIATE_TRACKING_URL || null;
+
+function trackAffiliateClick(link) {
+  try {
+    if (AFFILIATE_TRACKING_URL) {
+      fetch(AFFILIATE_TRACKING_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ link, page: window.location.href, ts: Date.now() }),
+      }).catch((err) => console.warn("Affiliate tracking failed", err));
+    } else {
+      const key = "affiliate_clicks";
+      const data = JSON.parse(localStorage.getItem(key) || "{}");
+      data[link] = (data[link] || 0) + 1;
+      localStorage.setItem(key, JSON.stringify(data));
+      console.log("Affiliate click recorded locally", link);
+    }
+  } catch (err) {
+    console.error("Error tracking affiliate click", err);
+  }
+}
+
 const dom = {
   hero: document.getElementById("hero"),
   searchForm: document.getElementById("search-form"),
@@ -520,8 +544,8 @@ function getStreamingLinksFor(data, mediaType) {
 
 function getSponsoredLinkMarkup() {
   return `
-    <a class="secondary sponsored" href="${MONETAG_SMARTLINK}" target="_blank" rel="noreferrer sponsored">
-      Sponsored offer
+    <a class="secondary sponsored" href="${SMARTLINK_URL}" target="_blank" rel="noreferrer sponsored">
+      Open Sponsored Offer
     </a>
   `;
 }
@@ -563,6 +587,7 @@ async function openTitle(movieId, mediaType = state.media) {
         <div class="cast-list">${castHtml || "<span>Cast unavailable</span>"}</div>
         <div class="watch-section">
           <h3>Download movie</h3>
+          <p class="sponsor-disclosure">This sponsored link opens in a new tab and helps support the site. Click only if you want to proceed.</p>
           <div class="provider-grid">
             ${getStreamingLinksFor(data, mediaType)}
           </div>
@@ -584,6 +609,17 @@ async function openTitle(movieId, mediaType = state.media) {
         </div>
       </div>
     `;
+
+    // Attach click handlers for sponsored links (explicit opt-in)
+    const sponsoredEls = dom.modalBody.querySelectorAll('.sponsored');
+    sponsoredEls.forEach((el) => {
+      el.addEventListener('click', (evt) => {
+        evt.preventDefault();
+        const href = el.getAttribute('href') || SMARTLINK_URL;
+        trackAffiliateClick(href);
+        window.open(href, '_blank', 'noopener');
+      });
+    });
   } catch (error) {
     console.error(error);
     dom.modalBody.innerHTML = `<div class="status">Could not load this title right now.</div>`;
