@@ -493,6 +493,19 @@ function providerLinksFor(providerData) {
     .join("");
 }
 
+function getStreamingLinks(mediaType) {
+  if (mediaType === "tv") {
+    return `
+      <a class="provider-pill" href="https://animepahe.pw" target="_blank" rel="noreferrer">Watch on animepahe.pw</a>
+    `;
+  } else {
+    return `
+      <a class="provider-pill" href="https://nkiri.ink" target="_blank" rel="noreferrer">Watch on nkiri.ink</a>
+      <a class="provider-pill" href="https://moviebox.ph" target="_blank" rel="noreferrer">Watch on moviebox.ph</a>
+    `;
+  }
+}
+
 async function openTitle(movieId, mediaType = state.media) {
   try {
     dom.modalBody.innerHTML = `<div class="status">Loading title details...</div>`;
@@ -528,6 +541,12 @@ async function openTitle(movieId, mediaType = state.media) {
         <p>${escapeHtml(data.overview || "No description is available for this title.")}</p>
         <div class="genre-list">${genres || `<span>${mediaTypeLabel(mediaType)}</span>`}</div>
         <div class="cast-list">${castHtml || "<span>Cast unavailable</span>"}</div>
+        <div class="watch-section">
+          <h3>Stream now</h3>
+          <div class="provider-grid">
+            ${getStreamingLinks(mediaType)}
+          </div>
+        </div>
         <div class="watch-section">
           <h3>Watch on official platforms</h3>
           <div class="provider-grid">
