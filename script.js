@@ -115,6 +115,8 @@ const dom = {
   prevPage: document.getElementById("prev-page"),
   nextPage: document.getElementById("next-page"),
   pageIndicator: document.getElementById("page-indicator"),
+  trendingRow: document.getElementById("trending-row"),
+  newOnRow: document.getElementById("new-on-row"),
   featurePanel: document.querySelector(".feature-panel"),
   modal: document.getElementById("movie-modal"),
   modalBody: document.getElementById("modal-body"),
@@ -378,6 +380,51 @@ function renderMovies(movies) {
     ? movies.map(createSearchResultCard).join("")
     : `<div class="status">No movies found. Try a different search or filter.</div>`;
   updateStats();
+}
+
+function createShelfCard(item, mediaType = state.media) {
+  const title = item.title || item.name || "Untitled";
+  const rating = item.vote_average ? item.vote_average.toFixed(1) : "N/A";
+  const year = formatYear(item.release_date || item.first_air_date);
+  return `
+    <article class="shelf-card" data-open="${item.id}" data-media-type="${mediaType}">
+      <img loading="lazy" src="${posterUrl(item.poster_path)}" alt="${escapeHtml(title)} poster" />
+      <div class="shelf-card-copy">
+        <h3>${escapeHtml(title)}</h3>
+        <div class="shelf-card-meta">
+          <span>${year}</span>
+          <span>★ ${rating}</span>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function renderShelf(rowEl, items, mediaType = state.media) {
+  if (!rowEl) return;
+  rowEl.innerHTML = items.length
+    ? items.map((item) => createShelfCard(item, mediaType)).join("")
+    : `<div class="shelf-empty">Nothing to show right now.</div>`;
+}
+
+async function loadShelf(rowEl, path, mediaType = state.media, limit = 10) {
+  if (!rowEl) return;
+  rowEl.innerHTML = Array.from({ length: 6 })
+    .map(() => `<div class="shelf-card skeleton shelf-skeleton"></div>`)
+    .join("");
+
+  try {
+    const data = await request(path);
+    const items = (data.results || [])
+      .filter((item) => item.media_type !== "person")
+      .map((item) => (item.media_type ? item : { ...item, media_type: mediaType }))
+      .filter((item) => item.poster_path || item.backdrop_path)
+      .slice(0, limit);
+    renderShelf(rowEl, items, mediaType);
+  } catch (error) {
+    console.error(error);
+    renderShelf(rowEl, [], mediaType);
+  }
 }
 
 function setStatus(message) {
@@ -728,6 +775,15 @@ function wireEvents() {
     openTitle(button.dataset.open, button.dataset.mediaType || state.media);
   });
 
+  [dom.trendingRow, dom.newOnRow].forEach((row) => {
+    if (!row) return;
+    row.addEventListener("click", (event) => {
+      const card = event.target.closest("[data-open]");
+      if (!card) return;
+      openTitle(card.dataset.open, card.dataset.mediaType || state.media);
+    });
+  });
+
   dom.closeModal.addEventListener("click", () => dom.modal.close());
   dom.modal.addEventListener("click", (event) => {
     const rect = dom.modal.getBoundingClientRect();
@@ -761,12 +817,28 @@ function updateSectionButtonLabels() {
 async function refreshData() {
   renderGenres();
   setStatus("Loading TMDB data...");
-  await Promise.all([loadGenres(), loadFeaturedMovie()]);
+  await Promise.all([loadGenres(), loadFeaturedMovie(), loadShelfRows()]);
   await loadMovies();
   clearTimeout(refreshData._timer);
   refreshData._timer = window.setTimeout(() => {
     refreshData().catch((error) => console.error(error));
   }, 60 * 60 * 1000);
+}
+
+async function loadShelfRows() {
+  const mediaType = state.media;
+  const trendingPath =
+    mediaType === "movie" ? "/trending/movie/week" : "/trending/tv/week";
+  const { from, to } = getNewReleaseWindow();
+  const newOnPath =
+    mediaType === "movie"
+      ? `/discover/movie?primary_release_date.gte=${from}&primary_release_date.lte=${to}&sort_by=primary_release_date.desc&page=1`
+      : `/discover/tv?first_air_date.gte=${from}&first_air_date.lte=${to}&sort_by=first_air_date.desc&page=1`;
+
+  await Promise.allSettled([
+    loadShelf(dom.trendingRow, trendingPath, mediaType, 10),
+    loadShelf(dom.newOnRow, newOnPath, mediaType, 10),
+  ]);
 }
 
 async function bootstrap() {
