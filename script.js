@@ -520,10 +520,13 @@ function providerLinksFor(providerData) {
 }
 
 function isAnimeTitle(data) {
+  // True anime: Japanese language AND (has anime or animation genre)
   const genres = (data.genres || []).map((g) => String(g.name).toLowerCase());
-  if (genres.includes("animation") || genres.includes("anime")) return true;
-  if (data.original_language === "ja") return true;
-  return false;
+  const isJapanese = data.original_language === "ja";
+  const hasAnimationGenre = genres.includes("animation") || genres.includes("anime");
+  
+  // Only return true for Japanese anime, not Western cartoons
+  return isJapanese && hasAnimationGenre;
 }
 
 function getStreamingLinksFor(data, mediaType) {
