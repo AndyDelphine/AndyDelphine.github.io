@@ -1076,27 +1076,28 @@ main {
   }
 
   .movie-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.75rem;
+    grid-template-columns: 1fr;
+    gap: 0.9rem;
   }
 
   .movie-card {
-    border-radius: 1rem;
+    border-radius: 1.15rem;
+    max-width: 100%;
   }
 
   .movie-card-body {
-    padding: 0.75rem;
-    gap: 0.35rem;
+    padding: 0.82rem;
+    gap: 0.42rem;
   }
 
   .movie-card h3 {
-    font-size: 0.95rem;
+    font-size: 1rem;
   }
 
   .movie-card .card-overview {
-    font-size: 0.82rem;
-    line-height: 1.45;
-    -webkit-line-clamp: 2;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    -webkit-line-clamp: 3;
   }
 
   .results {
