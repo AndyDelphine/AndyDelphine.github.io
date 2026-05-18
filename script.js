@@ -912,6 +912,12 @@ async function openTitle(movieId, mediaType = state.media) {
           <div class="genre-list">${genres || "<span>Anime</span>"}</div>
           <div class="cast-list">${studios || "<span>Studio unavailable</span>"}</div>
           <div class="watch-section">
+            <h3>Download in</h3>
+            <div class="provider-grid">
+              ${getStreamingLinksFor(anime, mediaType)}
+            </div>
+          </div>
+          <div class="watch-section">
             <h3>Watch on official platforms</h3>
             <div class="provider-grid">
               ${anime.url ? `<a class="provider-pill" href="${anime.url}" target="_blank" rel="noreferrer">Open on MyAnimeList</a>` : `<span class="provider-empty">No official link available.</span>`}
