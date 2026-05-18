@@ -650,10 +650,11 @@ function getStreamingLinksFor(data, mediaType) {
     `;
   }
 
-  // For movies and TV series, show the three download buttons with short labels.
+  // For movies and TV series, show the four download buttons with short labels.
   return `
     <a class="provider-pill" href="https://nkiri.ink" target="_blank" rel="noreferrer">Nkiri</a>
     <a class="provider-pill" href="https://moviebox.ph" target="_blank" rel="noreferrer">Moviebox</a>
+    <a class="provider-pill" href="https://videodownloader.site" target="_blank" rel="noreferrer">Moviedownloader</a>
     <a class="provider-pill" href="https://o2tvseries.com" target="_blank" rel="noreferrer">o2tvseries</a>
   `;
 }
