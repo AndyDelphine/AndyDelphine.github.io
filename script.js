@@ -855,7 +855,7 @@ function getStreamingLinksFor(data, mediaType) {
     return `
       <a class="provider-pill" href="https://animepahe.pw" target="_blank" rel="noreferrer">animepahe</a>
       <a class="provider-pill" href="https://kisskh.do" target="_blank" rel="noreferrer">kisskh</a>
-      <a class="provider-pill" href="https://9animetv.do" target="_blank" rel="noreferrer">9anime</a>
+      <a class="provider-pill" href="https://9animex.tv" target="_blank" rel="noreferrer">9anime</a>
     `;
   }
 
@@ -969,7 +969,7 @@ async function openTitle(movieId, mediaType = state.media) {
         <div class="genre-list">${genres || `<span>${mediaTypeLabel(mediaType)}</span>`}</div>
         <div class="cast-list">${castHtml || "<span>Cast unavailable</span>"}</div>
         <div class="watch-section">
-          <h3>${mediaType === "anime" ? "Download in" : "Download movie"}</h3>
+          <h3>${mediaType === "anime" ? "Download here" : "Download movie"}</h3>
           <p class="sponsor-disclosure">This sponsored link opens in a new tab and helps support the site. Click only if you want to proceed.</p>
           <div class="provider-grid">
             ${getStreamingLinksFor(data, mediaType)}
