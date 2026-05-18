@@ -702,6 +702,11 @@ async function loadAnimeFeed(page = 1, section = "new_releases", searchTerm = ""
     upcoming: [`/top/anime?page=${pageIndex}`],
   };
 
+  const isCurrentYear = (item) => {
+    const year = new Date(item.release_date || item.first_air_date || "").getFullYear();
+    return !Number.isNaN(year) && year === new Date().getFullYear();
+  };
+
   const responses = await Promise.allSettled((sectionPaths[section] || sectionPaths.new_releases).map((path) => requestJikan(path)));
   for (const response of responses) {
     if (response.status !== "fulfilled") continue;
@@ -710,6 +715,7 @@ async function loadAnimeFeed(page = 1, section = "new_releases", searchTerm = ""
       if (seen.has(key)) continue;
       if (!item.poster_path && !item.backdrop_path) continue;
       if (item.status && String(item.status).toLowerCase().includes("not yet aired")) continue;
+      if (section === "new_releases" && !isCurrentYear(item)) continue;
       if (genreFilter && !(item.genre_ids || []).map(String).includes(genreFilter)) continue;
       seen.add(key);
       merged.push(item);
@@ -845,14 +851,14 @@ function isAnimeTitle(data) {
 }
 
 function getStreamingLinksFor(data, mediaType) {
-  // If the title appears to be anime show, return animepahe only.
-  if (isAnimeTitle(data)) {
+  if (mediaType === "anime") {
     return `
       <a class="provider-pill" href="https://animepahe.pw" target="_blank" rel="noreferrer">animepahe</a>
+      <a class="provider-pill" href="https://kisskh.do" target="_blank" rel="noreferrer">kisskh</a>
+      <a class="provider-pill" href="https://9animetv.do" target="_blank" rel="noreferrer">9anime</a>
     `;
   }
 
-  // For movies and TV series, show the four download buttons with short labels.
   return `
     <a class="provider-pill" href="https://nkiri.ink" target="_blank" rel="noreferrer">Nkiri</a>
     <a class="provider-pill" href="https://moviebox.ph" target="_blank" rel="noreferrer">Moviebox</a>
@@ -963,7 +969,7 @@ async function openTitle(movieId, mediaType = state.media) {
         <div class="genre-list">${genres || `<span>${mediaTypeLabel(mediaType)}</span>`}</div>
         <div class="cast-list">${castHtml || "<span>Cast unavailable</span>"}</div>
         <div class="watch-section">
-          <h3>Download movie</h3>
+          <h3>${mediaType === "anime" ? "Download in" : "Download movie"}</h3>
           <p class="sponsor-disclosure">This sponsored link opens in a new tab and helps support the site. Click only if you want to proceed.</p>
           <div class="provider-grid">
             ${getStreamingLinksFor(data, mediaType)}
