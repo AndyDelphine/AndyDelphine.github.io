@@ -20,12 +20,14 @@ const POSTER_PLACEHOLDER =
 
 const sections = {
   movie: {
+    new_releases: { label: "New releases", endpoint: "/discover/movie?sort_by=primary_release_date.desc" },
     popular: { label: "Popular titles", endpoint: "/movie/popular" },
     top_rated: { label: "Top rated titles", endpoint: "/movie/top_rated" },
     now_playing: { label: "Now playing titles", endpoint: "/movie/now_playing" },
     upcoming: { label: "Upcoming titles", endpoint: "/movie/upcoming" },
   },
   tv: {
+    new_releases: { label: "New releases", endpoint: "/discover/tv?sort_by=first_air_date.desc" },
     popular: { label: "Popular shows", endpoint: "/tv/popular" },
     top_rated: { label: "Top rated shows", endpoint: "/tv/top_rated" },
     now_playing: { label: "Airing today", endpoint: "/tv/airing_today" },
@@ -35,7 +37,7 @@ const sections = {
 
 const state = {
   media: "movie",
-  section: "popular",
+  section: "new_releases",
   genre: "all",
   searchTerm: "",
   genres: [],
@@ -179,6 +181,17 @@ function posterTypeLabel(mediaType) {
 
 function getActiveSection() {
   return sections[state.media][state.section];
+}
+
+function getNewReleaseWindow() {
+  const end = new Date();
+  const start = new Date(end);
+  start.setDate(end.getDate() - 120);
+  const toYmd = (date) => date.toISOString().slice(0, 10);
+  return {
+    from: toYmd(start),
+    to: toYmd(end),
+  };
 }
 
 function getRecentWindow() {
@@ -430,6 +443,13 @@ async function loadMovies() {
       data = await request(
         `/search/multi?query=${encodeURIComponent(state.searchTerm)}&page=${state.currentPage}&include_adult=false`
       );
+    } else if (state.section === "new_releases") {
+      const { from, to } = getNewReleaseWindow();
+      const dateField = state.media === "movie" ? "primary_release_date" : "first_air_date";
+      const genreFilter = state.genre !== "all" ? `&with_genres=${encodeURIComponent(state.genre)}` : "";
+      data = await request(
+        `/discover/${state.media}?${dateField}.gte=${from}&${dateField}.lte=${to}${genreFilter}&sort_by=${dateField}.desc&page=${state.currentPage}`
+      );
     } else if (state.genre !== "all") {
       data = await request(`/discover/${state.media}?with_genres=${encodeURIComponent(state.genre)}&sort_by=popularity.desc&page=${state.currentPage}`);
     } else {
@@ -636,7 +656,7 @@ function wireEvents() {
       document.querySelectorAll("[data-media]").forEach((item) => item.classList.remove("active"));
       button.classList.add("active");
       state.media = button.dataset.media;
-      state.section = "popular";
+      state.section = "new_releases";
       state.genre = "all";
       state.searchTerm = "";
       state.currentPage = 1;
@@ -723,8 +743,8 @@ function wireEvents() {
 function updateSectionButtonLabels() {
   const labels =
     state.media === "movie"
-      ? ["Popular", "Top Rated", "Now Playing", "Upcoming"]
-      : ["Popular", "Top Rated", "Airing Today", "On The Air"];
+      ? ["New Releases", "Popular", "Top Rated", "Now Playing", "Upcoming"]
+      : ["New Releases", "Popular", "Top Rated", "Airing Today", "On The Air"];
   document.querySelectorAll("[data-section]").forEach((button, index) => {
     button.textContent = labels[index] || button.textContent;
   });
@@ -743,6 +763,10 @@ async function refreshData() {
   setStatus("Loading TMDB data...");
   await Promise.all([loadGenres(), loadFeaturedMovie()]);
   await loadMovies();
+  clearTimeout(refreshData._timer);
+  refreshData._timer = window.setTimeout(() => {
+    refreshData().catch((error) => console.error(error));
+  }, 60 * 60 * 1000);
 }
 
 async function bootstrap() {
