@@ -20,14 +20,14 @@ const POSTER_PLACEHOLDER =
 
 const sections = {
   movie: {
-    new_releases: { label: "New releases", endpoint: "/discover/movie?sort_by=primary_release_date.desc" },
+    new_releases: { label: "Trending now", endpoint: "/discover/movie?sort_by=primary_release_date.desc" },
     popular: { label: "Popular titles", endpoint: "/movie/popular" },
     top_rated: { label: "Top rated titles", endpoint: "/movie/top_rated" },
     now_playing: { label: "Now playing titles", endpoint: "/movie/now_playing" },
     upcoming: { label: "Upcoming titles", endpoint: "/movie/upcoming" },
   },
   tv: {
-    new_releases: { label: "New releases", endpoint: "/discover/tv?sort_by=first_air_date.desc" },
+    new_releases: { label: "Trending now", endpoint: "/discover/tv?sort_by=first_air_date.desc" },
     popular: { label: "Popular shows", endpoint: "/tv/popular" },
     top_rated: { label: "Top rated shows", endpoint: "/tv/top_rated" },
     now_playing: { label: "Airing today", endpoint: "/tv/airing_today" },
@@ -115,8 +115,6 @@ const dom = {
   prevPage: document.getElementById("prev-page"),
   nextPage: document.getElementById("next-page"),
   pageIndicator: document.getElementById("page-indicator"),
-  trendingRow: document.getElementById("trending-row"),
-  newOnRow: document.getElementById("new-on-row"),
   featurePanel: document.querySelector(".feature-panel"),
   modal: document.getElementById("movie-modal"),
   modalBody: document.getElementById("modal-body"),
@@ -175,6 +173,18 @@ function genreName(ids) {
 
 function mediaTypeLabel(mediaType) {
   return mediaType === "tv" ? "TV Show" : "Movie";
+}
+
+function cardTypeLabel(item) {
+  const mediaType = item.media_type || state.media;
+  if (
+    mediaType === "tv" &&
+    ((item.original_language || "").toLowerCase() === "ja" ||
+      String(item.name || item.title || "").toLowerCase().includes("anime"))
+  ) {
+    return "Anime";
+  }
+  return mediaTypeLabel(mediaType);
 }
 
 function posterTypeLabel(mediaType) {
@@ -359,7 +369,7 @@ function createSearchResultCard(movie) {
     <article class="movie-card" data-id="${movie.id}">
       <div class="poster-wrap">
         <img loading="lazy" src="${posterUrl(movie.poster_path)}" alt="${escapeHtml(title)} poster" />
-        <span class="rating-badge">${mediaTypeLabel(mediaType)} · ★ ${rating}</span>
+        <span class="rating-badge">${cardTypeLabel(movie)} · ★ ${rating}</span>
       </div>
       <div class="movie-card-body">
         <h3>${escapeHtml(title)}</h3>
@@ -479,7 +489,9 @@ async function loadMovies() {
   dom.resultsLabel.textContent = state.searchTerm ? "All search results" : active.label;
   dom.resultsTitle.textContent = state.searchTerm
     ? `Results for "${state.searchTerm}"`
-    : `Browse ${active.label.toLowerCase()}`;
+    : state.section === "new_releases"
+      ? "Trending now"
+      : `Browse ${active.label.toLowerCase()}`;
 
   setStatus("Loading movies...");
   setLoadingSkeleton();
@@ -491,12 +503,7 @@ async function loadMovies() {
         `/search/multi?query=${encodeURIComponent(state.searchTerm)}&page=${state.currentPage}&include_adult=false`
       );
     } else if (state.section === "new_releases") {
-      const { from, to } = getNewReleaseWindow();
-      const dateField = state.media === "movie" ? "primary_release_date" : "first_air_date";
-      const genreFilter = state.genre !== "all" ? `&with_genres=${encodeURIComponent(state.genre)}` : "";
-      data = await request(
-        `/discover/${state.media}?${dateField}.gte=${from}&${dateField}.lte=${to}${genreFilter}&sort_by=${dateField}.desc&page=${state.currentPage}`
-      );
+      data = await loadTrendingFeed();
     } else if (state.genre !== "all") {
       data = await request(`/discover/${state.media}?with_genres=${encodeURIComponent(state.genre)}&sort_by=popularity.desc&page=${state.currentPage}`);
     } else {
@@ -522,6 +529,45 @@ async function loadMovies() {
     setStatus("We could not load TMDB data right now. Check your API key and internet connection.");
     dom.movieGrid.innerHTML = "";
   }
+}
+
+async function loadTrendingFeed() {
+  const { from, to } = getNewReleaseWindow();
+  const releaseWindow = `${from}~${to}`;
+  const genreFilter = state.genre !== "all" ? `&with_genres=${encodeURIComponent(state.genre)}` : "";
+  const paths = [
+    `/discover/movie?primary_release_date.gte=${from}&primary_release_date.lte=${to}${genreFilter}&sort_by=popularity.desc&page=1`,
+    `/discover/tv?first_air_date.gte=${from}&first_air_date.lte=${to}${genreFilter}&sort_by=popularity.desc&page=1`,
+    `/discover/tv?first_air_date.gte=${from}&first_air_date.lte=${to}&with_genres=16&sort_by=popularity.desc&page=1`,
+    `/discover/tv?first_air_date.gte=${from}&first_air_date.lte=${to}&with_original_language=ja&sort_by=popularity.desc&page=1`,
+  ];
+
+  const responses = await Promise.allSettled(paths.map((path) => request(path)));
+  const seen = new Set();
+  const merged = [];
+
+  for (const response of responses) {
+    if (response.status !== "fulfilled") continue;
+    for (const item of response.value.results || []) {
+      const mediaType = item.media_type || (item.title ? "movie" : "tv");
+      const key = `${mediaType}:${item.id}`;
+      if (seen.has(key)) continue;
+      if (!item.poster_path && !item.backdrop_path) continue;
+      seen.add(key);
+      merged.push({
+        ...item,
+        media_type: mediaType,
+        _trendWindow: releaseWindow,
+      });
+    }
+  }
+
+  merged.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+
+  return {
+    results: merged.slice(0, 20),
+    total_pages: 1,
+  };
 }
 
 async function openMovie(movieId) {
@@ -775,15 +821,6 @@ function wireEvents() {
     openTitle(button.dataset.open, button.dataset.mediaType || state.media);
   });
 
-  [dom.trendingRow, dom.newOnRow].forEach((row) => {
-    if (!row) return;
-    row.addEventListener("click", (event) => {
-      const card = event.target.closest("[data-open]");
-      if (!card) return;
-      openTitle(card.dataset.open, card.dataset.mediaType || state.media);
-    });
-  });
-
   dom.closeModal.addEventListener("click", () => dom.modal.close());
   dom.modal.addEventListener("click", (event) => {
     const rect = dom.modal.getBoundingClientRect();
@@ -799,8 +836,8 @@ function wireEvents() {
 function updateSectionButtonLabels() {
   const labels =
     state.media === "movie"
-      ? ["New Releases", "Popular", "Top Rated", "Now Playing", "Upcoming"]
-      : ["New Releases", "Popular", "Top Rated", "Airing Today", "On The Air"];
+      ? ["Trending Now", "Popular", "Top Rated", "Now Playing", "Upcoming"]
+      : ["Trending Now", "Popular", "Top Rated", "Airing Today", "On The Air"];
   document.querySelectorAll("[data-section]").forEach((button, index) => {
     button.textContent = labels[index] || button.textContent;
   });
@@ -817,28 +854,12 @@ function updateSectionButtonLabels() {
 async function refreshData() {
   renderGenres();
   setStatus("Loading TMDB data...");
-  await Promise.all([loadGenres(), loadFeaturedMovie(), loadShelfRows()]);
+  await Promise.all([loadGenres(), loadFeaturedMovie()]);
   await loadMovies();
   clearTimeout(refreshData._timer);
   refreshData._timer = window.setTimeout(() => {
     refreshData().catch((error) => console.error(error));
   }, 60 * 60 * 1000);
-}
-
-async function loadShelfRows() {
-  const mediaType = state.media;
-  const trendingPath =
-    mediaType === "movie" ? "/trending/movie/week" : "/trending/tv/week";
-  const { from, to } = getNewReleaseWindow();
-  const newOnPath =
-    mediaType === "movie"
-      ? `/discover/movie?primary_release_date.gte=${from}&primary_release_date.lte=${to}&sort_by=primary_release_date.desc&page=1`
-      : `/discover/tv?first_air_date.gte=${from}&first_air_date.lte=${to}&sort_by=first_air_date.desc&page=1`;
-
-  await Promise.allSettled([
-    loadShelf(dom.trendingRow, trendingPath, mediaType, 10),
-    loadShelf(dom.newOnRow, newOnPath, mediaType, 10),
-  ]);
 }
 
 async function bootstrap() {
