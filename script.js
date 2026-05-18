@@ -1,5 +1,6 @@
 const TMDB_API_KEY = window.TMDB_CONFIG?.apiKey || "PASTE_YOUR_TMDB_API_KEY_HERE";
 const TMDB_BASE = "https://api.themoviedb.org/3";
+const JIKAN_BASE = "https://api.jikan.moe/v4";
 const IMAGE_BASE = "https://image.tmdb.org/t/p/w780";
 const MONETAG_SMARTLINK = "https://omg10.com/4/11016678";
 const POSTER_PLACEHOLDER =
@@ -160,6 +161,8 @@ function formatRuntime(minutes) {
 }
 
 function posterUrl(path) {
+  if (!path) return POSTER_PLACEHOLDER;
+  if (/^https?:\/\//i.test(path) || path.startsWith("data:")) return path;
   return path ? `${IMAGE_BASE}${path}` : POSTER_PLACEHOLDER;
 }
 
@@ -173,9 +176,11 @@ function escapeHtml(value) {
 }
 
 function genreName(ids) {
-  if (!ids?.length || !state.genres.length) return "Movie";
+  if (!ids?.length || !state.genres.length) {
+    return state.media === "anime" ? "Anime" : state.media === "tv" ? "Series" : "Movie";
+  }
   const selected = state.genres.find((genre) => ids.includes(genre.id));
-  return selected?.name ?? "Movie";
+  return selected?.name ?? (state.media === "anime" ? "Anime" : state.media === "tv" ? "Series" : "Movie");
 }
 
 function mediaTypeLabel(mediaType) {
@@ -201,6 +206,7 @@ function cardTypeLabel(item) {
 }
 
 function isAnimeListingItem(item) {
+  if (getItemMediaType(item) === "anime") return true;
   if (getItemMediaType(item) !== "tv") return false;
   const title = String(item.name || item.title || "").toLowerCase();
   const genres = item.genre_ids || [];
@@ -225,6 +231,63 @@ function getActiveSection() {
 
 function getTmdbMediaType(mediaType = state.media) {
   return mediaType === "anime" ? "tv" : mediaType;
+}
+
+function requestJikan(path) {
+  return fetch(`${JIKAN_BASE}${path}`).then(async (response) => {
+    if (!response.ok) {
+      throw new Error(`Jikan request failed: ${response.status}`);
+    }
+    return response.json();
+  });
+}
+
+function parseAnimeRuntime(duration) {
+  if (!duration) return null;
+  const match = String(duration).match(/(\d+)/);
+  return match ? Number(match[1]) : null;
+}
+
+function normalizeJikanAnime(item) {
+  if (!item) return null;
+  const genres = (item.genres || []).map((genre) => genre.mal_id).filter(Boolean);
+  const title = item.title || item.title_english || item.title_japanese || "Untitled";
+  const image =
+    item.images?.jpg?.large_image_url ||
+    item.images?.jpg?.image_url ||
+    item.images?.webp?.large_image_url ||
+    item.images?.webp?.image_url ||
+    "";
+  const airedDate = item.aired?.from || item.aired?.string || item.published?.from || null;
+  return {
+    id: item.mal_id,
+    mal_id: item.mal_id,
+    media_type: "anime",
+    title,
+    name: title,
+    overview: item.synopsis || item.background || "No synopsis available yet.",
+    poster_path: image,
+    backdrop_path: image,
+    vote_average: typeof item.score === "number" ? item.score : null,
+    release_date: airedDate,
+    first_air_date: airedDate,
+    genre_ids: genres,
+    genres: (item.genres || []).map((genre) => ({ id: genre.mal_id, name: genre.name })),
+    status: item.status,
+    runtime: parseAnimeRuntime(item.duration),
+    episode_run_time: parseAnimeRuntime(item.duration) ? [parseAnimeRuntime(item.duration)] : [],
+    episodes: item.episodes,
+    original_language: "ja",
+    url: item.url,
+    trailer: item.trailer,
+    studios: item.studios,
+    aired: item.aired,
+    images: item.images,
+  };
+}
+
+function normalizeJikanResults(data) {
+  return (data?.data || []).map(normalizeJikanAnime).filter(Boolean);
 }
 
 function getNewReleaseWindow() {
@@ -272,13 +335,23 @@ function animateFeaturedSwap() {
 async function loadFeaturedQueue() {
   const { from, to } = getRecentWindow();
   if (state.media === "anime") {
-    const data = await request(
-      `/discover/tv?first_air_date.gte=${from}&first_air_date.lte=${to}&with_genres=16&sort_by=popularity.desc&page=1`
-    );
-    state.featuredQueue = (data.results || [])
-      .filter((item) => item.poster_path || item.backdrop_path)
-      .slice(0, 6)
-      .map((item) => ({ ...item, media_type: "anime" }));
+    const [seasonResponse, topResponse] = await Promise.allSettled([
+      requestJikan(`/seasons/now?page=1`),
+      requestJikan(`/top/anime?page=1`),
+    ]);
+    const merged = [];
+    const seen = new Set();
+    [seasonResponse, topResponse].forEach((response) => {
+      if (response.status !== "fulfilled") return;
+      normalizeJikanResults(response.value).forEach((item) => {
+        const key = `anime:${item.id}`;
+        if (seen.has(key)) return;
+        if (!item.poster_path && !item.backdrop_path) return;
+        seen.add(key);
+        merged.push(item);
+      });
+    });
+    state.featuredQueue = merged.slice(0, 6);
     state.featuredIndex = 0;
     return;
   }
@@ -362,7 +435,7 @@ function updateStats() {
   dom.statCount.textContent = String(state.currentMovies.length || 0).padStart(2, "0");
   dom.statSection.textContent =
     state.media === "movie" ? "Movies" : state.media === "anime" ? "Anime" : "Series";
-  dom.statRating.textContent = state.searchTerm ? "Search" : "TMDB";
+  dom.statRating.textContent = state.searchTerm ? "Search" : state.media === "anime" ? "Jikan" : "TMDB";
   dom.pageIndicator.textContent = `Page ${state.currentPage} of ${state.totalPages || 1}`;
   dom.prevPage.disabled = state.currentPage <= 1;
   dom.nextPage.disabled = state.currentPage >= (state.totalPages || 1);
@@ -524,8 +597,13 @@ function setHero(movie) {
 }
 
 async function loadGenres() {
-  const data = await request(`/genre/${getTmdbMediaType()}/list`);
-  state.genres = data.genres || [];
+  if (state.media === "anime") {
+    const data = await requestJikan(`/genres/anime`);
+    state.genres = (data.data || []).map((genre) => ({ id: genre.mal_id, name: genre.name }));
+  } else {
+    const data = await request(`/genre/${getTmdbMediaType()}/list`);
+    state.genres = data.genres || [];
+  }
   renderGenres();
 }
 
@@ -544,24 +622,30 @@ async function loadMovies() {
       ? "Trending now"
       : `Browse ${active.label.toLowerCase()}`;
 
-  setStatus("Loading movies...");
+  setStatus("Loading titles...");
   setLoadingSkeleton();
 
   try {
     let data;
-    if (state.searchTerm) {
+    let totalPages = 1;
+    if (state.media === "anime") {
+      data = await loadAnimeFeed(state.currentPage, state.section, state.searchTerm);
+      totalPages = data.total_pages || 1;
+    } else if (state.searchTerm) {
       data = await request(`/search/multi?query=${encodeURIComponent(state.searchTerm)}&page=${state.currentPage}&include_adult=false`);
-    } else if (state.media === "anime") {
-      data = await loadAnimeFeed(state.currentPage, state.section);
+      totalPages = data.total_pages || 1;
     } else if (state.section === "new_releases") {
       data = await loadTrendingFeed(state.currentPage);
+      totalPages = data.total_pages || 1;
     } else if (state.genre !== "all") {
       data = await request(`/discover/${state.media}?with_genres=${encodeURIComponent(state.genre)}&sort_by=popularity.desc&page=${state.currentPage}`);
+      totalPages = data.total_pages || 1;
     } else {
       data = await request(`${active.endpoint}?page=${state.currentPage}`);
+      totalPages = data.total_pages || 1;
     }
 
-    const movies = (data.results || [])
+    const sourceMovies = (data.results || [])
       .filter((movie) => movie.media_type !== "person")
       .map((movie) =>
         state.searchTerm && !movie.media_type ? { ...movie, media_type: movie.title ? "movie" : "tv" } : movie
@@ -569,11 +653,13 @@ async function loadMovies() {
       .filter((movie) => movie.poster_path || movie.backdrop_path);
     const filteredMovies =
       state.media === "anime"
-        ? movies.filter(isAnimeListingItem)
+        ? sourceMovies.filter(isAnimeListingItem).filter((movie) =>
+            state.genre === "all" ? true : (movie.genre_ids || []).map(String).includes(String(state.genre))
+          )
         : state.media === "tv"
-          ? movies.filter(isSeriesListingItem)
-          : movies;
-    state.totalPages = Math.max(1, Math.min(data.total_pages || 1, 500));
+          ? sourceMovies.filter(isSeriesListingItem)
+          : sourceMovies;
+    state.totalPages = Math.max(1, Math.min(totalPages || 1, 500));
     renderMovies(filteredMovies);
     setStatus(
       filteredMovies.length
@@ -583,49 +669,54 @@ async function loadMovies() {
     updateStats();
   } catch (error) {
     console.error(error);
-    setStatus("We could not load TMDB data right now. Check your API key and internet connection.");
+    setStatus("We could not load catalog data right now. Check your connection and API setup.");
     dom.movieGrid.innerHTML = "";
   }
 }
 
-async function loadAnimeFeed(page = 1, section = "new_releases") {
-  const { from, to } = getNewReleaseWindow();
-  const since = from;
-  const until = to;
+async function loadAnimeFeed(page = 1, section = "new_releases", searchTerm = "") {
   const pageIndex = Math.max(1, Math.min(Number(page) || 1, 50));
-  const genreFilter = state.genre !== "all" ? `&with_genres=${encodeURIComponent(state.genre)}` : "";
-  const sortBy =
-    section === "top_rated"
-      ? "vote_average.desc"
-      : section === "popular"
-        ? "popularity.desc"
-        : "first_air_date.desc";
-  const paths = [
-    `/discover/tv?first_air_date.gte=${since}&first_air_date.lte=${until}&with_genres=16&with_original_language=ja${genreFilter}&sort_by=${sortBy}&page=${pageIndex}`,
-    `/discover/tv?first_air_date.gte=${since}&first_air_date.lte=${until}&with_genres=16&with_original_language=en${genreFilter}&sort_by=${sortBy}&page=${pageIndex}`,
-    `/discover/tv?first_air_date.gte=${since}&first_air_date.lte=${until}&with_genres=16${genreFilter}&sort_by=${sortBy}&page=${pageIndex}`,
-    `/discover/tv?first_air_date.gte=${since}&first_air_date.lte=${until}&with_original_language=ja${genreFilter}&sort_by=${sortBy}&page=${pageIndex}`,
-  ];
-
-  const responses = await Promise.allSettled(paths.map((path) => request(path)));
   const seen = new Set();
   const merged = [];
+  const genreFilter = state.genre !== "all" ? String(state.genre) : null;
 
+  if (searchTerm) {
+    const data = await requestJikan(`/anime?q=${encodeURIComponent(searchTerm)}&page=${pageIndex}&sfw=true`);
+    const results = normalizeJikanResults(data)
+      .filter((item) => item.poster_path || item.backdrop_path)
+      .filter((item) => (genreFilter ? (item.genre_ids || []).map(String).includes(genreFilter) : true));
+    return {
+      results,
+      total_pages: Math.max(1, Math.min(data.pagination?.last_visible_page || 1, 50)),
+    };
+  }
+
+  const sectionPaths = {
+    new_releases: [
+      `/seasons/now?page=${pageIndex}`,
+      `/top/anime?page=${pageIndex}`,
+    ],
+    popular: [`/top/anime?page=${pageIndex}`],
+    top_rated: [`/top/anime?page=${pageIndex}`],
+    now_playing: [`/seasons/now?page=${pageIndex}`],
+    upcoming: [`/top/anime?page=${pageIndex}`],
+  };
+
+  const responses = await Promise.allSettled((sectionPaths[section] || sectionPaths.new_releases).map((path) => requestJikan(path)));
   for (const response of responses) {
     if (response.status !== "fulfilled") continue;
-    for (const item of response.value.results || []) {
+    for (const item of normalizeJikanResults(response.value)) {
       const key = `anime:${item.id}`;
       if (seen.has(key)) continue;
       if (!item.poster_path && !item.backdrop_path) continue;
+      if (item.status && String(item.status).toLowerCase().includes("not yet aired")) continue;
+      if (genreFilter && !(item.genre_ids || []).map(String).includes(genreFilter)) continue;
       seen.add(key);
-      merged.push({
-        ...item,
-        media_type: "anime",
-      });
+      merged.push(item);
     }
   }
 
-  merged.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+  merged.sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
 
   return {
     results: merged.slice(0, 20),
@@ -639,22 +730,19 @@ async function loadTrendingFeed(page = 1) {
   const until = to;
   const genreFilter = state.genre !== "all" ? `&with_genres=${encodeURIComponent(state.genre)}` : "";
   const pageIndex = Math.max(1, Math.min(Number(page) || 1, 50));
+  if (state.media === "anime") {
+    return loadAnimeFeed(pageIndex, state.section);
+  }
   const paths =
     state.media === "movie"
       ? [
           `/discover/movie?primary_release_date.gte=${since}&primary_release_date.lte=${until}${genreFilter}&sort_by=primary_release_date.desc&page=${pageIndex}`,
           `/discover/movie?primary_release_date.gte=${since}&primary_release_date.lte=${until}&sort_by=popularity.desc&page=${pageIndex}`,
         ]
-      : state.media === "anime"
-        ? [
-            `/discover/tv?first_air_date.gte=${since}&first_air_date.lte=${until}&with_genres=16&with_original_language=ja${genreFilter}&sort_by=popularity.desc&page=${pageIndex}`,
-            `/discover/tv?first_air_date.gte=${since}&first_air_date.lte=${until}&with_genres=16&with_original_language=en${genreFilter}&sort_by=popularity.desc&page=${pageIndex}`,
-            `/discover/tv?first_air_date.gte=${since}&first_air_date.lte=${until}&with_genres=16${genreFilter}&sort_by=vote_average.desc&page=${pageIndex}`,
-          ]
-        : [
-            `/discover/tv?first_air_date.gte=${since}&first_air_date.lte=${until}&without_genres=16${genreFilter}&sort_by=first_air_date.desc&page=${pageIndex}`,
-            `/discover/tv?first_air_date.gte=${since}&first_air_date.lte=${until}&without_genres=16${genreFilter}&sort_by=popularity.desc&page=${pageIndex}`,
-          ];
+      : [
+          `/discover/tv?first_air_date.gte=${since}&first_air_date.lte=${until}&without_genres=16${genreFilter}&sort_by=first_air_date.desc&page=${pageIndex}`,
+          `/discover/tv?first_air_date.gte=${since}&first_air_date.lte=${until}&without_genres=16${genreFilter}&sort_by=popularity.desc&page=${pageIndex}`,
+        ];
 
   const responses = await Promise.allSettled(paths.map((path) => request(path)));
   const seen = new Set();
@@ -668,7 +756,6 @@ async function loadTrendingFeed(page = 1) {
       if (seen.has(key)) continue;
       if (!item.poster_path && !item.backdrop_path) continue;
       if (state.media === "tv" && !isSeriesListingItem(item)) continue;
-      if (state.media === "anime" && !isAnimeListingItem(item)) continue;
       seen.add(key);
       merged.push({
         ...item,
@@ -786,6 +873,63 @@ async function openTitle(movieId, mediaType = state.media) {
   try {
     dom.modalBody.innerHTML = `<div class="status">Loading title details...</div>`;
     dom.modal.showModal();
+
+    if (mediaType === "anime") {
+      let animeResponse;
+      try {
+        animeResponse = await requestJikan(`/anime/${movieId}/full`);
+      } catch (error) {
+        animeResponse = await requestJikan(`/anime/${movieId}`);
+      }
+      const anime = normalizeJikanAnime(animeResponse.data || animeResponse);
+      const genres = (anime.genres || []).map((genre) => `<span>${escapeHtml(genre.name)}</span>`).join("");
+      const studios = (anime.studios || []).map((studio) => `<span>${escapeHtml(studio.name)}</span>`).join("");
+      const trailerId = anime.trailer?.youtube_id;
+      const trailerMarkup = trailerId
+        ? `<a class="primary" href="https://www.youtube.com/watch?v=${encodeURIComponent(trailerId)}" target="_blank" rel="noreferrer">Watch trailer</a>`
+        : "";
+
+      dom.modalBody.innerHTML = `
+        <div class="modal-poster">
+          <img src="${posterUrl(anime.poster_path)}" alt="${escapeHtml(anime.title)} poster" />
+        </div>
+        <div class="modal-copy">
+          <p class="eyebrow">${escapeHtml(anime.status || "Anime details")}</p>
+          <h2>${escapeHtml(anime.title)}</h2>
+          <div class="meta-line">
+            <span class="meta-pill">${escapeHtml(anime.release_date ? formatYear(anime.release_date) : anime.aired?.string || "--")}</span>
+            <span class="meta-pill">${anime.episodes ? `${anime.episodes} eps` : "Episodes unknown"}</span>
+            <span class="meta-pill">★ ${anime.vote_average ? anime.vote_average.toFixed(1) : "N/A"}</span>
+            <span class="meta-pill">${escapeHtml(anime.status || "Released")}</span>
+          </div>
+          <p>${escapeHtml(anime.overview || "No synopsis is available for this anime.")}</p>
+          <div class="genre-list">${genres || "<span>Anime</span>"}</div>
+          <div class="cast-list">${studios || "<span>Studio unavailable</span>"}</div>
+          <div class="watch-section">
+            <h3>Watch on official platforms</h3>
+            <div class="provider-grid">
+              ${anime.url ? `<a class="provider-pill" href="${anime.url}" target="_blank" rel="noreferrer">Open on MyAnimeList</a>` : `<span class="provider-empty">No official link available.</span>`}
+            </div>
+          </div>
+          <div class="modal-actions">
+            ${trailerMarkup}
+            ${getSponsoredLinkMarkup()}
+            <a class="secondary" href="${anime.url || "https://myanimelist.net"}" target="_blank" rel="noreferrer">Open source page</a>
+          </div>
+        </div>
+      `;
+
+      const sponsoredEls = dom.modalBody.querySelectorAll(".sponsored");
+      sponsoredEls.forEach((el) => {
+        el.addEventListener("click", (evt) => {
+          evt.preventDefault();
+          const href = el.getAttribute("href") || SMARTLINK_URL;
+          trackAffiliateClick(href);
+          window.open(href, "_blank", "noopener");
+        });
+      });
+      return;
+    }
 
     const requestMedia = getTmdbMediaType(mediaType);
     const [data, providerData] = await Promise.all([
@@ -979,7 +1123,7 @@ function updateSectionButtonLabels() {
 
 async function refreshData() {
   renderGenres();
-  setStatus("Loading TMDB data...");
+  setStatus("Loading catalog data...");
   await Promise.all([loadGenres(), loadFeaturedMovie()]);
   await loadMovies();
   clearTimeout(refreshData._timer);
@@ -993,7 +1137,7 @@ async function bootstrap() {
   wireEvents();
   updateSectionButtonLabels();
   renderGenres();
-  setStatus("Loading TMDB data...");
+  setStatus("Loading catalog data...");
 
   try {
     await refreshData();
