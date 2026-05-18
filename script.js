@@ -532,15 +532,16 @@ async function loadMovies() {
 }
 
 async function loadTrendingFeed(page = 1) {
-  const { from } = getNewReleaseWindow();
+  const { from, to } = getNewReleaseWindow();
   const since = from;
+  const until = to;
   const genreFilter = state.genre !== "all" ? `&with_genres=${encodeURIComponent(state.genre)}` : "";
   const pageIndex = Math.max(1, Math.min(Number(page) || 1, 50));
   const paths = [
-    `/discover/movie?primary_release_date.gte=${since}${genreFilter}&sort_by=primary_release_date.desc&page=${pageIndex}`,
-    `/discover/tv?first_air_date.gte=${since}${genreFilter}&sort_by=first_air_date.desc&page=${pageIndex}`,
-    `/discover/tv?first_air_date.gte=${since}&with_genres=16&with_original_language=ja&sort_by=first_air_date.desc&page=${pageIndex}`,
-    `/discover/tv?first_air_date.gte=${since}&with_genres=16&sort_by=first_air_date.desc&page=${pageIndex}`,
+    `/discover/movie?primary_release_date.gte=${since}&primary_release_date.lte=${until}${genreFilter}&sort_by=primary_release_date.desc&page=${pageIndex}`,
+    `/discover/tv?first_air_date.gte=${since}&first_air_date.lte=${until}${genreFilter}&sort_by=first_air_date.desc&page=${pageIndex}`,
+    `/discover/tv?first_air_date.gte=${since}&first_air_date.lte=${until}&with_genres=16&with_original_language=ja&sort_by=first_air_date.desc&page=${pageIndex}`,
+    `/discover/tv?first_air_date.gte=${since}&first_air_date.lte=${until}&with_genres=16&sort_by=first_air_date.desc&page=${pageIndex}`,
   ];
 
   const responses = await Promise.allSettled(paths.map((path) => request(path)));
